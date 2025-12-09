@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>WebカメラとWeb Serial統合デモ</title>
+    <title>WebカメラAAとWeb Serial統合デモ</title>
     <style>
         body { font-family: sans-serif; margin: 20px; }
         h1, h2 { border-bottom: 2px solid #eee; padding-bottom: 5px; }
@@ -13,9 +13,22 @@
             height: 480px; /* 映像の高さ */
             display: block;
             margin-top: 10px;
-            background-color: #000; /* 未接続時の背景色 */
+            background-color: #000;
         }
-        #controlPanel, #serialPanel { 
+        #asciiOutput {
+            /* アスキーアート表示エリアのスタイル設定 */
+            font-family: 'IPA Gothic', 'IPA Gothict', 'ＭＳ ゴシック', 'MS Gothic', monospace; 
+            font-size: 10px; 
+            line-height: 1; 
+            letter-spacing: normal; 
+            border: 1px solid #999;
+            padding: 5px;
+            white-space: pre;
+            width: fit-content;
+            background-color: #fff;
+            color: #000;
+        }
+        #controlPanel, #serialPanel, #asciiPanel { 
             margin-top: 15px; 
             padding: 10px; 
             border: 1px solid #ddd; 
@@ -23,10 +36,12 @@
         }
         label { display: inline-block; width: 150px; }
         pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; }
+        /* 変換処理用の一時的なキャンバスは非表示 */
+        #hiddenCanvas { display: none; } 
     </style>
 </head>
 <body>
-    <h1>WebカメラとWeb Serial統合デモ</h1>
+    <h1>WebカメラAAとWeb Serial統合デモ</h1>
 
     <h2>1. カメラフィード</h2>
     <video id="cameraFeed" autoplay playsinline></video>
@@ -57,7 +72,17 @@
 
     <hr>
 
-    <h2>3. シリアル送信</h2>
+    <h2>3. アスキーアート表示 (48x32)</h2>
+    <div id="asciiPanel">
+        <button id="startAsciiButton" disabled>AA変換開始</button>
+        <button id="stopAsciiButton" disabled>AA変換停止</button>
+        <pre id="asciiOutput">AAがここに表示されます...</pre>
+        <canvas id="hiddenCanvas"></canvas>
+    </div>
+    
+    <hr>
+
+    <h2>4. シリアル送信</h2>
     <div id="serialPanel">
         <button id="connectButton">シリアルポートに接続</button>
         <button id="disconnectButton" disabled>切断</button>
@@ -70,6 +95,7 @@
         // 開発フォルダに置いたモジュールをインポート
         import { startCamera, stopCamera, getTrackInfo, applyCameraSettings } from './cameraFeed.js';
         import { connectSerialPort, sendData, disconnectSerialPort } from './serialSender.js';
+        import { startAsciiConversion, stopAsciiConversion } from './asciiConverter.js'; 
 
         // --- UI要素の取得 ---
         // カメラ
@@ -86,6 +112,12 @@
         const showCapabilitiesButton = document.getElementById('showCapabilitiesButton');
         const capabilitiesOutput = document.getElementById('capabilitiesOutput');
 
+        // アスキーアート
+        const startAsciiButton = document.getElementById('startAsciiButton');
+        const stopAsciiButton = document.getElementById('stopAsciiButton');
+        const asciiOutput = document.getElementById('asciiOutput');
+        const hiddenCanvas = document.getElementById('hiddenCanvas');
+        
         // シリアル
         const connectButton = document.getElementById('connectButton');
         const disconnectButton = document.getElementById('disconnectButton');
@@ -102,33 +134,31 @@
                 stopCameraButton.disabled = false;
                 applySettingsButton.disabled = false;
                 showCapabilitiesButton.disabled = false;
-                // 初回に能力を表示
+                startAsciiButton.disabled = false;
                 getTrackInfo(); 
             }
         });
 
         stopCameraButton.addEventListener('click', () => {
             stopCamera();
+            stopAsciiConversion(); // カメラ停止時はAA変換も停止
+            
             startCameraButton.disabled = false;
             stopCameraButton.disabled = true;
             applySettingsButton.disabled = true;
             showCapabilitiesButton.disabled = true;
+            startAsciiButton.disabled = true;
+            stopAsciiButton.disabled = true;
             capabilitiesOutput.textContent = 'カメラ起動後に「能力を表示」ボタンを押してください。';
         });
 
         // --- 2. カメラ制御機能のリスナー ---
-        exposureSlider.addEventListener('input', () => {
-            exposureValueSpan.textContent = exposureSlider.value;
-        });
-
-        contrastSlider.addEventListener('input', () => {
-            contrastValueSpan.textContent = contrastSlider.value;
-        });
+        exposureSlider.addEventListener('input', () => { exposureValueSpan.textContent = exposureSlider.value; });
+        contrastSlider.addEventListener('input', () => { contrastValueSpan.textContent = contrastSlider.value; });
 
         applySettingsButton.addEventListener('click', async () => {
             const exposureTime = parseInt(exposureSlider.value, 10);
             const contrast = parseInt(contrastSlider.value, 10); 
-            
             await applyCameraSettings(exposureTime, contrast);
         });
 
@@ -138,8 +168,27 @@
                 capabilitiesOutput.textContent = JSON.stringify(info.capabilities, null, 2);
             }
         });
+        
+        // --- 3. アスキーアート機能のリスナー ---
+        startAsciiButton.addEventListener('click', () => {
+            if (videoElement.srcObject) {
+                // startAsciiConversion は videoElement から現在のフレームを読み取り、
+                // asciiOutput に結果を書き込み、hiddenCanvas を使用します。
+                startAsciiConversion(videoElement, asciiOutput, hiddenCanvas);
+                startAsciiButton.disabled = true;
+                stopAsciiButton.disabled = false;
+            } else {
+                alert('先にカメラを起動してください！');
+            }
+        });
 
-        // --- 3. Web Serial 機能のリスナー ---
+        stopAsciiButton.addEventListener('click', () => {
+            stopAsciiConversion();
+            startAsciiButton.disabled = false;
+            stopAsciiButton.disabled = true;
+        });
+
+        // --- 4. Web Serial 機能のリスナー ---
         connectButton.addEventListener('click', async () => {
             statusMessage.textContent = '状態: 接続中...';
             const connected = await connectSerialPort();
@@ -157,7 +206,6 @@
         });
 
         sendButton.addEventListener('click', async () => {
-            // 送信するデータ。改行文字 (\n) を付加
             const data = sendDataInput.value + '\n'; 
             await sendData(data);
         });
