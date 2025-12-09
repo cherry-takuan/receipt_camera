@@ -9,14 +9,14 @@
         button { padding: 10px 15px; margin: 5px 10px 5px 0; cursor: pointer; }
         #cameraFeed {
             border: 2px solid #ccc;
-            width: 640px; /* 映像の幅 */
-            height: 480px; /* 映像の高さ */
+            width: 640px; 
+            height: 480px;
             display: block;
             margin-top: 10px;
             background-color: #000;
         }
         #asciiOutput {
-            /* アスキーアート表示エリアのスタイル設定 */
+            /* 印刷フォーマット (32文字 x 48行) に合わせて表示 */
             font-family: 'IPA Gothic', 'IPA Gothict', 'ＭＳ ゴシック', 'MS Gothic', monospace; 
             font-size: 10px; 
             line-height: 1; 
@@ -28,7 +28,7 @@
             background-color: #fff;
             color: #000;
         }
-        #controlPanel, #serialPanel, #asciiPanel { 
+        #controlPanel, #serialPanel, #asciiPanel, #printPanel { 
             margin-top: 15px; 
             padding: 10px; 
             border: 1px solid #ddd; 
@@ -72,38 +72,44 @@
 
     <hr>
 
-    <h2>3. アスキーアート表示 (48x32)</h2>
+    <h2>3. アスキーアート表示 (転置後 32x48)</h2>
     <div id="asciiPanel">
         <button id="startAsciiButton" disabled>AA変換開始</button>
         <button id="stopAsciiButton" disabled>AA変換停止</button>
-        <pre id="asciiOutput">AAがここに表示されます...</pre>
+        <pre id="asciiOutput">AAがここに表示されます (32文字x48行の形式)...</pre>
         <canvas id="hiddenCanvas"></canvas>
     </div>
     
     <hr>
+    
+    <h2>4. 印刷/シリアル送信</h2>
+    <div id="printPanel">
+        <button id="printButton" disabled>AAを印刷機へ送信</button>
+        <p style="margin-top: 10px;">※ シリアルポートに接続済みで、AA変換を開始している必要があります。</p>
+    </div>
 
-    <h2>4. シリアル送信</h2>
+    <hr>
+
+    <h2>5. Web Serial API 接続</h2>
     <div id="serialPanel">
         <button id="connectButton">シリアルポートに接続</button>
         <button id="disconnectButton" disabled>切断</button>
         <input type="text" id="sendDataInput" value="Hello from Web App!" style="width: 300px; margin-left: 20px;">
-        <button id="sendButton" disabled>データ送信</button>
+        <button id="sendButton" disabled>データ送信 (テスト用)</button>
         <p id="statusMessage">状態: 未接続</p>
     </div>
 
     <script type="module">
-        // 開発フォルダに置いたモジュールをインポート
+        // --- モジュールインポート ---
         import { startCamera, stopCamera, getTrackInfo, applyCameraSettings } from './cameraFeed.js';
         import { connectSerialPort, sendData, disconnectSerialPort } from './serialSender.js';
-        import { startAsciiConversion, stopAsciiConversion } from './asciiConverter.js'; 
+        import { startAsciiConversion, stopAsciiConversion, printAsciiArt } from './asciiConverter.js'; 
 
         // --- UI要素の取得 ---
-        // カメラ
         const videoElement = document.getElementById('cameraFeed');
         const startCameraButton = document.getElementById('startCameraButton');
         const stopCameraButton = document.getElementById('stopCameraButton');
         
-        // カメラ制御
         const exposureSlider = document.getElementById('exposureSlider');
         const exposureValueSpan = document.getElementById('exposureValue');
         const contrastSlider = document.getElementById('contrastSlider');
@@ -112,13 +118,13 @@
         const showCapabilitiesButton = document.getElementById('showCapabilitiesButton');
         const capabilitiesOutput = document.getElementById('capabilitiesOutput');
 
-        // アスキーアート
         const startAsciiButton = document.getElementById('startAsciiButton');
         const stopAsciiButton = document.getElementById('stopAsciiButton');
         const asciiOutput = document.getElementById('asciiOutput');
         const hiddenCanvas = document.getElementById('hiddenCanvas');
         
-        // シリアル
+        const printButton = document.getElementById('printButton'); 
+        
         const connectButton = document.getElementById('connectButton');
         const disconnectButton = document.getElementById('disconnectButton');
         const sendDataInput = document.getElementById('sendDataInput');
@@ -126,6 +132,15 @@
         const statusMessage = document.getElementById('statusMessage');
 
 
+        // --- 制御ボタンの有効/無効を更新するヘルパー関数 ---
+        function updatePrintButtonState() {
+            // シリアル接続済み (disconnectButtonが有効) かつ カメラ起動済み (stopCameraButtonが有効) の場合に印刷ボタンを有効化
+            const isSerialReady = disconnectButton.disabled === false; 
+            const isCameraOn = stopCameraButton.disabled === false;
+            
+            printButton.disabled = !(isSerialReady && isCameraOn);
+        }
+        
         // --- 1. カメラ機能のリスナー ---
         startCameraButton.addEventListener('click', async () => {
             const started = await startCamera(videoElement);
@@ -136,12 +151,13 @@
                 showCapabilitiesButton.disabled = false;
                 startAsciiButton.disabled = false;
                 getTrackInfo(); 
+                updatePrintButtonState(); 
             }
         });
 
         stopCameraButton.addEventListener('click', () => {
             stopCamera();
-            stopAsciiConversion(); // カメラ停止時はAA変換も停止
+            stopAsciiConversion();
             
             startCameraButton.disabled = false;
             stopCameraButton.disabled = true;
@@ -150,8 +166,9 @@
             startAsciiButton.disabled = true;
             stopAsciiButton.disabled = true;
             capabilitiesOutput.textContent = 'カメラ起動後に「能力を表示」ボタンを押してください。';
+            updatePrintButtonState(); 
         });
-
+        
         // --- 2. カメラ制御機能のリスナー ---
         exposureSlider.addEventListener('input', () => { exposureValueSpan.textContent = exposureSlider.value; });
         contrastSlider.addEventListener('input', () => { contrastValueSpan.textContent = contrastSlider.value; });
@@ -164,16 +181,13 @@
 
         showCapabilitiesButton.addEventListener('click', () => {
             const info = getTrackInfo();
-            if (info) {
-                capabilitiesOutput.textContent = JSON.stringify(info.capabilities, null, 2);
-            }
+            if (info) { capabilitiesOutput.textContent = JSON.stringify(info.capabilities, null, 2); }
         });
         
         // --- 3. アスキーアート機能のリスナー ---
         startAsciiButton.addEventListener('click', () => {
             if (videoElement.srcObject) {
-                // startAsciiConversion は videoElement から現在のフレームを読み取り、
-                // asciiOutput に結果を書き込み、hiddenCanvas を使用します。
+                // AA変換を開始し、画面にリアルタイム表示
                 startAsciiConversion(videoElement, asciiOutput, hiddenCanvas);
                 startAsciiButton.disabled = true;
                 stopAsciiButton.disabled = false;
@@ -187,8 +201,27 @@
             startAsciiButton.disabled = false;
             stopAsciiButton.disabled = true;
         });
+        
+        // --- 4. 印刷ボタンのリスナー ---
+        printButton.addEventListener('click', async () => {
+            // AA変換が開始されているか確認 (AA文字列の有無で簡易チェック)
+            if (asciiOutput.textContent.trim() === 'AAがここに表示されます (32文字x48行の形式)...') {
+                alert("❌ AA変換を開始し、画面にAAが表示されている状態で行ってください。");
+                return;
+            }
 
-        // --- 4. Web Serial 機能のリスナー ---
+            printButton.disabled = true; 
+            
+            // 画面表示中のAA文字列を直接取得して送信
+            const success = await printAsciiArt(asciiOutput);
+            
+            if (success) {
+                console.log("印刷データ送信フロー完了。");
+            }
+            updatePrintButtonState(); 
+        });
+
+        // --- 5. Web Serial 機能のリスナー ---
         connectButton.addEventListener('click', async () => {
             statusMessage.textContent = '状態: 接続中...';
             const connected = await connectSerialPort();
@@ -197,25 +230,28 @@
                 connectButton.disabled = true;
                 disconnectButton.disabled = false;
                 sendButton.disabled = false;
+                updatePrintButtonState(); 
             } else {
                 statusMessage.textContent = '状態: 接続失敗またはキャンセル';
                 connectButton.disabled = false;
                 disconnectButton.disabled = true;
                 sendButton.disabled = true;
+                printButton.disabled = true; 
             }
         });
-
-        sendButton.addEventListener('click', async () => {
-            const data = sendDataInput.value + '\n'; 
-            await sendData(data);
-        });
-
+        
         disconnectButton.addEventListener('click', async () => {
             await disconnectSerialPort();
             statusMessage.textContent = '状態: 未接続';
             connectButton.disabled = false;
             disconnectButton.disabled = true;
             sendButton.disabled = true;
+            updatePrintButtonState(); 
+        });
+        
+        sendButton.addEventListener('click', async () => {
+            const data = sendDataInput.value + '\n'; 
+            await sendData(data);
         });
     </script>
 </body>
