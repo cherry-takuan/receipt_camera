@@ -74,6 +74,11 @@
 
     <h2>3. アスキーアート表示 (転置後 32x48)</h2>
     <div id="asciiPanel">
+        <p>
+            <label for="thresholdSlider">二値化 閾値 (0-255): </label>
+            <input type="range" id="thresholdSlider" min="0" max="255" value="128" step="1">
+            <span id="thresholdValue">128</span>
+        </p>
         <button id="startAsciiButton" disabled>AA変換開始</button>
         <button id="stopAsciiButton" disabled>AA変換停止</button>
         <pre id="asciiOutput">AAがここに表示されます (32文字x48行の形式)...</pre>
@@ -101,6 +106,7 @@
 
     <script type="module">
         // --- モジュールインポート ---
+        var threshold;
         import { startCamera, stopCamera, getTrackInfo, applyCameraSettings } from './cameraFeed.js';
         import { connectSerialPort, sendData, disconnectSerialPort } from './serialSender.js';
         import { startAsciiConversion, stopAsciiConversion, printAsciiArt } from './asciiConverter.js'; 
@@ -131,6 +137,22 @@
         const sendButton = document.getElementById('sendButton');
         const statusMessage = document.getElementById('statusMessage');
 
+        // スライダー要素と表示要素を取得
+        const slider = document.getElementById('thresholdSlider');
+        const valueDisplay = document.getElementById('thresholdValue');
+
+        // スライダーの値が変更されたときに実行する関数
+        function updateValue() {
+            // スライダーの現在の値を取得し、表示要素に設定
+            valueDisplay.textContent = slider.value;
+            threshold = slider.value;
+        }
+
+        // inputイベント（値が変更されるたびに発生）でupdateValue関数を呼び出す
+        slider.addEventListener('input', updateValue);
+
+        // 初期表示用の値も設定（ページ読み込み時にも反映させるため）
+        updateValue();
 
         // --- 制御ボタンの有効/無効を更新するヘルパー関数 ---
         function updatePrintButtonState() {
@@ -188,7 +210,7 @@
         startAsciiButton.addEventListener('click', () => {
             if (videoElement.srcObject) {
                 // AA変換を開始し、画面にリアルタイム表示
-                startAsciiConversion(videoElement, asciiOutput, hiddenCanvas);
+                startAsciiConversion(videoElement, asciiOutput, hiddenCanvas,threshold);
                 startAsciiButton.disabled = true;
                 stopAsciiButton.disabled = false;
             } else {
