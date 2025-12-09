@@ -29,7 +29,7 @@
 
 ## 📂ディレクトリ構成
 ```
-web-serial-aa-printer/
+docs/
 ├── index.html            # メインページ (UI、HTML構造、イベントリスナーを統合)
 ├── asciiConverter.js     # AA生成、二値化、転置ロジック、印刷処理を含むコアモジュール
 ├── cameraFeed.js         # Webカメラの起動、停止、設定制御を担うモジュール
