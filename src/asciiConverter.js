@@ -2,6 +2,8 @@
  * asciiConverter.js (画面からAAを取得してシリアル送信)
  */
 
+import { sendData } from './serialSender.js'; 
+
 // 最終的なアスキーアートのサイズ
 const OUTPUT_WIDTH = 64; // 元の画像の幅
 const OUTPUT_HEIGHT = 32; // 元の画像の高さ
@@ -12,7 +14,7 @@ const DENSITY_MAP = [
 ];
 const DENSITY_STEP = 256 / DENSITY_MAP.length; 
 
-let animationFrameId = null; // requestAnimationFrame のID
+let animationFrameId = null; 
 let isConverting = false;
 let isSending = false;
 
@@ -21,21 +23,16 @@ let isSending = false;
  */
 function convertFrameToAscii(videoElement, outputElement, canvasElement) {
     if (!isConverting || videoElement.paused || videoElement.ended) {
-        return; // 変換が停止しているか、動画が終了している場合は終了
+        return; 
     }
 
     const ctx = canvasElement.getContext('2d', { willReadFrequently: true });
 
-    // 1. 映像をリアルタイムに48*32ピクセルに縮小 (キャンバスへの描画時に実行)
-    // キャンバスのサイズを最終出力サイズに合わせる
+    // 1. 映像をリアルタイムに48*32ピクセルに縮小
     canvasElement.width = OUTPUT_WIDTH;
     canvasElement.height = OUTPUT_HEIGHT;
-
-    // 動画フレーム全体を、指定された48x32のサイズに縮小して描画
     ctx.drawImage(videoElement, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-    // 縮小された画像からピクセルデータを取得
-    // data配列は [R, G, B, A, R, G, B, A, ...] の順でピクセルデータを持つ
     const imageData = ctx.getImageData(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
     const data = imageData.data;
     let asciiArt = '';
@@ -60,29 +57,22 @@ function convertFrameToAscii(videoElement, outputElement, canvasElement) {
             const charIndex = Math.floor(brightness / DENSITY_STEP);
             const char = DENSITY_MAP[Math.min(charIndex, DENSITY_MAP.length - 1)];
 
-            line += char;
+            line += char; 
         }
-        asciiArt += line + '\n'; // 行末に改行を追加
+        asciiArt += line + '\n'; 
     }
 
-    // アスキーアートを出力要素に書き込む
     outputElement.textContent = asciiArt;
-
-    // 次のフレームで再帰的に実行
     animationFrameId = requestAnimationFrame(() => convertFrameToAscii(videoElement, outputElement, canvasElement));
 }
 
 export function startAsciiConversion(videoElement, outputElement, canvasElement) {
     if (isConverting) return;
-    currentThreshold = threshold; // 新しい閾値を設定
     isConverting = true;
     console.log('▶️ アスキーアート変換を開始します (画面表示)。');
     convertFrameToAscii(videoElement, outputElement, canvasElement);
 }
 
-/**
- * アスキーアート変換を停止する関数
- */
 export function stopAsciiConversion() {
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);

@@ -43,12 +43,27 @@
 <body>
     <h1>WebカメラAAとWeb Serial統合デモ</h1>
 
-    <h2>1. カメラフィード</h2>
-    <video id="cameraFeed" autoplay playsinline></video>
-    <div>
-        <button id="startCameraButton">カメラを起動</button>
-        <button id="stopCameraButton" disabled>カメラを停止</button>
-    </div>
+    <table>
+        <tr>
+            <td>
+                <h2>1. カメラフィード</h2>
+                <video id="cameraFeed" autoplay playsinline></video>
+                <div>
+                    <button id="startCameraButton">カメラを起動</button>
+                    <button id="stopCameraButton" disabled>カメラを停止</button>
+                </div>
+            </td>
+            <td>
+                <h2>3. アスキーアート表示 (48x32)</h2>
+                <div id="asciiPanel">
+                    <button id="startAsciiButton" disabled>AA変換開始</button>
+                    <button id="stopAsciiButton" disabled>AA変換停止</button>
+                    <pre id="asciiOutput">AAがここに表示されます...</pre>
+                    <canvas id="hiddenCanvas"></canvas>
+                </div>
+            </td>
+        </tr>
+    </table>
 
     <hr>
 
@@ -68,21 +83,6 @@
         <button id="showCapabilitiesButton" disabled>能力を表示</button>
         <h3>サポートされている能力</h3>
         <pre id="capabilitiesOutput">カメラ起動後に「能力を表示」ボタンを押してください。</pre>
-    </div>
-
-    <hr>
-
-    <h2>3. アスキーアート表示 (48x32)</h2>
-    <div id="asciiPanel">
-        <p>
-            <label for="thresholdSlider">二値化 閾値 (0-255): </label>
-            <input type="range" id="thresholdSlider" min="0" max="255" value="128" step="1">
-            <span id="thresholdValue">128</span>
-        </p>
-        <button id="startAsciiButton" disabled>AA変換開始</button>
-        <button id="stopAsciiButton" disabled>AA変換停止</button>
-        <pre id="asciiOutput">AAがここに表示されます...</pre>
-        <canvas id="hiddenCanvas"></canvas>
     </div>
     
     <hr>
