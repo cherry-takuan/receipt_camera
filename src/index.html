@@ -2,56 +2,173 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Web Serial API 送信デモ</title>
+    <title>WebカメラとWeb Serial統合デモ</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        h1, h2 { border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        button { padding: 10px 15px; margin: 5px 10px 5px 0; cursor: pointer; }
+        #cameraFeed {
+            border: 2px solid #ccc;
+            width: 640px; /* 映像の幅 */
+            height: 480px; /* 映像の高さ */
+            display: block;
+            margin-top: 10px;
+            background-color: #000; /* 未接続時の背景色 */
+        }
+        #controlPanel, #serialPanel { 
+            margin-top: 15px; 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 5px;
+        }
+        label { display: inline-block; width: 150px; }
+        pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
 </head>
 <body>
-    <h1>Web Serial 送信デモ</h1>
-    <button id="connectButton">シリアルポートに接続</button>
-    <button id="sendButton" disabled>データ送信 ('Hello!')</button>
-    <button id="disconnectButton" disabled>切断</button>
-    <p id="statusMessage">状態: 未接続</p>
+    <h1>WebカメラとWeb Serial統合デモ</h1>
+
+    <h2>1. カメラフィード</h2>
+    <video id="cameraFeed" autoplay playsinline></video>
+    <div>
+        <button id="startCameraButton">カメラを起動</button>
+        <button id="stopCameraButton" disabled>カメラを停止</button>
+    </div>
+
+    <hr>
+
+    <h2>2. カメラ制御 (露出・コントラスト)</h2>
+    <div id="controlPanel">
+        <p>
+            <label for="exposureSlider">露出時間 (Exposure Time): </label>
+            <input type="range" id="exposureSlider" min="1" max="1000" value="100" step="1">
+            <span id="exposureValue">100</span> ms
+        </p>
+        <p>
+            <label for="contrastSlider">コントラスト (Contrast): </label>
+            <input type="range" id="contrastSlider" min="0" max="1000" value="500" step="10">
+            <span id="contrastValue">500</span>
+        </p>
+        <button id="applySettingsButton" disabled>設定を適用</button>
+        <button id="showCapabilitiesButton" disabled>能力を表示</button>
+        <h3>サポートされている能力</h3>
+        <pre id="capabilitiesOutput">カメラ起動後に「能力を表示」ボタンを押してください。</pre>
+    </div>
+
+    <hr>
+
+    <h2>3. シリアル送信</h2>
+    <div id="serialPanel">
+        <button id="connectButton">シリアルポートに接続</button>
+        <button id="disconnectButton" disabled>切断</button>
+        <input type="text" id="sendDataInput" value="Hello from Web App!" style="width: 300px; margin-left: 20px;">
+        <button id="sendButton" disabled>データ送信</button>
+        <p id="statusMessage">状態: 未接続</p>
+    </div>
 
     <script type="module">
+        // 開発フォルダに置いたモジュールをインポート
+        import { startCamera, stopCamera, getTrackInfo, applyCameraSettings } from './cameraFeed.js';
         import { connectSerialPort, sendData, disconnectSerialPort } from './serialSender.js';
 
+        // --- UI要素の取得 ---
+        // カメラ
+        const videoElement = document.getElementById('cameraFeed');
+        const startCameraButton = document.getElementById('startCameraButton');
+        const stopCameraButton = document.getElementById('stopCameraButton');
+        
+        // カメラ制御
+        const exposureSlider = document.getElementById('exposureSlider');
+        const exposureValueSpan = document.getElementById('exposureValue');
+        const contrastSlider = document.getElementById('contrastSlider');
+        const contrastValueSpan = document.getElementById('contrastValue');
+        const applySettingsButton = document.getElementById('applySettingsButton');
+        const showCapabilitiesButton = document.getElementById('showCapabilitiesButton');
+        const capabilitiesOutput = document.getElementById('capabilitiesOutput');
+
+        // シリアル
         const connectButton = document.getElementById('connectButton');
-        const sendButton = document.getElementById('sendButton');
         const disconnectButton = document.getElementById('disconnectButton');
+        const sendDataInput = document.getElementById('sendDataInput');
+        const sendButton = document.getElementById('sendButton');
         const statusMessage = document.getElementById('statusMessage');
 
+
+        // --- 1. カメラ機能のリスナー ---
+        startCameraButton.addEventListener('click', async () => {
+            const started = await startCamera(videoElement);
+            if (started) {
+                startCameraButton.disabled = true;
+                stopCameraButton.disabled = false;
+                applySettingsButton.disabled = false;
+                showCapabilitiesButton.disabled = false;
+                // 初回に能力を表示
+                getTrackInfo(); 
+            }
+        });
+
+        stopCameraButton.addEventListener('click', () => {
+            stopCamera();
+            startCameraButton.disabled = false;
+            stopCameraButton.disabled = true;
+            applySettingsButton.disabled = true;
+            showCapabilitiesButton.disabled = true;
+            capabilitiesOutput.textContent = 'カメラ起動後に「能力を表示」ボタンを押してください。';
+        });
+
+        // --- 2. カメラ制御機能のリスナー ---
+        exposureSlider.addEventListener('input', () => {
+            exposureValueSpan.textContent = exposureSlider.value;
+        });
+
+        contrastSlider.addEventListener('input', () => {
+            contrastValueSpan.textContent = contrastSlider.value;
+        });
+
+        applySettingsButton.addEventListener('click', async () => {
+            const exposureTime = parseInt(exposureSlider.value, 10);
+            const contrast = parseInt(contrastSlider.value, 10); 
+            
+            await applyCameraSettings(exposureTime, contrast);
+        });
+
+        showCapabilitiesButton.addEventListener('click', () => {
+            const info = getTrackInfo();
+            if (info) {
+                capabilitiesOutput.textContent = JSON.stringify(info.capabilities, null, 2);
+            }
+        });
+
+        // --- 3. Web Serial 機能のリスナー ---
         connectButton.addEventListener('click', async () => {
             statusMessage.textContent = '状態: 接続中...';
             const connected = await connectSerialPort();
             if (connected) {
                 statusMessage.textContent = '状態: 接続済み';
                 connectButton.disabled = true;
-                sendButton.disabled = false;
                 disconnectButton.disabled = false;
+                sendButton.disabled = false;
             } else {
                 statusMessage.textContent = '状態: 接続失敗またはキャンセル';
                 connectButton.disabled = false;
-                sendButton.disabled = true;
                 disconnectButton.disabled = true;
+                sendButton.disabled = true;
             }
         });
 
         sendButton.addEventListener('click', async () => {
-            // 送信するデータ。デバイスの要件に合わせて改行文字 (\r\n など) を含めることが推奨されます。
-            const data = '\x1B@Hello from Web App!\n'; 
-            const sent = await sendData(data);
-            if (sent) {
-                // 送信後のUI更新などはここでは省略
-            }
+            // 送信するデータ。改行文字 (\n) を付加
+            const data = sendDataInput.value + '\n'; 
+            await sendData(data);
         });
 
         disconnectButton.addEventListener('click', async () => {
             await disconnectSerialPort();
             statusMessage.textContent = '状態: 未接続';
             connectButton.disabled = false;
-            sendButton.disabled = true;
             disconnectButton.disabled = true;
+            sendButton.disabled = true;
         });
-
     </script>
 </body>
 </html>
