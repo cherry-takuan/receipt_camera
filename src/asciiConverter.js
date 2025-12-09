@@ -52,10 +52,13 @@ function convertFrameToAscii(videoElement, outputElement, canvasElement) {
     let asciiArt = '';
 
     // 3. 1で縮小した画像を2で設定した文字列で1ピクセルずつ文字に変換し、ブラウザに表示
-    for (let y = 0; y < OUTPUT_HEIGHT; y++) {
+    //for (let y = 0; y < OUTPUT_HEIGHT; y++) {
+    for (let x = 0; x < OUTPUT_WIDTH; x++) {
         let line = '';
-        for (let x = 0; x < OUTPUT_WIDTH; x++) {
+        //for (let x = 0; x < OUTPUT_WIDTH; x++) {
+        for (let y = 0; y < OUTPUT_HEIGHT; y++) {
             const i = (y * OUTPUT_WIDTH + x) * 4; // データ配列のインデックス (Rの場所)
+            //const i = (x * OUTPUT_HEIGHT + y) * 4; // データ配列のインデックス (Rの場所)
 
             // RGBから輝度 (Luminance) を計算
             // 標準的な加重平均 (L = 0.2126R + 0.7152G + 0.0722B) を使用
